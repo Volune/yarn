@@ -76,6 +76,26 @@ test('GitFetcher.fetch', async () => {
   expect(name).toBe('beeper');
 });
 
+test('GitFetcher.fetch with prepare script', async () => {
+  const dir = await mkdir('git-fetcher-with-prepare');
+  const fetcher = new GitFetcher(
+    dir,
+    {
+      type: 'git',
+      reference: 'https://github.com/Volune/test-js-git-repo',
+      hash: '90f974f63a1ab7f9f9030808896ff39b4d597591',
+      registry: 'npm',
+    },
+    (await Config.create()),
+  );
+  await fetcher.fetch();
+  const name = (await fs.readJson(path.join(dir, 'package.json'))).name;
+  expect(name).toBe('test-js-git-repo');
+  const dependencyName = (await fs.readJson(path.join(dir, 'dependency-package.json'))).name;
+  expect(dependencyName).toBe('beeper');
+  expect(await fs.exists(path.join(dir, 'prepare.js'))).toBe(false);
+});
+
 test('TarballFetcher.fetch', async () => {
   const dir = await mkdir('tarball-fetcher');
   const fetcher = new TarballFetcher(

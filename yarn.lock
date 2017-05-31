@@ -814,6 +814,10 @@ beeper@^1.0.0:
   version "1.1.1"
   resolved "https://registry.yarnpkg.com/beeper/-/beeper-1.1.1.tgz#e6d5ea8c5dad001304a70b22638447f69cb2f809"
 
+"beeper@https://github.com/sindresorhus/beeper.git":
+  version "1.1.1"
+  resolved "https://github.com/sindresorhus/beeper.git#34f2c73a340f000c9e060f7038362db6782b236e"
+
 big.js@^3.1.3:
   version "3.1.3"
   resolved "https://registry.yarnpkg.com/big.js/-/big.js-3.1.3.tgz#4cada2193652eb3ca9ec8e55c9015669c9806978"
@@ -4537,6 +4541,12 @@ test-exclude@^4.1.0:
     object-assign "^4.1.0"
     read-pkg-up "^1.0.1"
     require-main-filename "^1.0.1"
+
+"test-js-git-repo@https://github.com/Volune/test-js-git-repo":
+  version "0.0.0"
+  resolved "https://github.com/Volune/test-js-git-repo#90f974f63a1ab7f9f9030808896ff39b4d597591"
+  dependencies:
+    beeper "https://github.com/sindresorhus/beeper.git"
 
 text-table@~0.2.0:
   version "0.2.0"
