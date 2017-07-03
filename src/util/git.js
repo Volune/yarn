@@ -2,8 +2,9 @@
 
 import type Config from '../config.js';
 import type {Reporter} from '../reporters/index.js';
+import type {GitRefs} from './git-ref-resolver.js';
 import {MessageError, SecurityError} from '../errors.js';
-import {removeSuffix} from './misc.js';
+import {resolveVersion, isCommitSha, parseRefs} from './git-ref-resolver.js';
 import * as crypto from './crypto.js';
 import * as child from './child.js';
 import * as fs from './fs.js';
@@ -16,10 +17,6 @@ const tarFs = require('tar-fs');
 const tarStream = require('tar-stream');
 const url = require('url');
 import {createWriteStream} from 'fs';
-
-type GitRefs = {
-  [name: string]: string,
-};
 
 type GitUrl = {
   protocol: string, // parsed from URL
@@ -38,11 +35,6 @@ const env = {
   GIT_TERMINAL_PROMPT: 0,
   GIT_SSH_COMMAND: 'ssh -oBatchMode=yes',
 };
-
-// This regex is designed to match output from git of the style:
-//   ebeb6eafceb61dd08441ffe086c77eb472842494  refs/tags/v0.21.0
-// and extract the hash and tag name as capture groups
-const gitRefLineRegex = /^([a-fA-F0-9]+)\s+(?:[^/]+\/){2}(.*)$/;
 
 export default class Git {
   constructor(config: Config, gitUrl: GitUrl, hash: string) {
@@ -126,10 +118,6 @@ export default class Git {
    * Check if the input `target` is a 5-40 character hex commit hash.
    */
 
-  static isCommitHash(target: string): boolean {
-    return !!target && /^[a-f0-9]{5,40}$/.test(target);
-  }
-
   static async repoExists(ref: GitUrl): Promise<boolean> {
     try {
       await Git.spawn(['ls-remote', '-t', ref.repository]);
@@ -151,7 +139,7 @@ export default class Git {
    * Attempt to upgrade insecure protocols to secure protocol
    */
   static async secureGitUrl(ref: GitUrl, hash: string, reporter: Reporter): Promise<GitUrl> {
-    if (Git.isCommitHash(hash)) {
+    if (isCommitSha(hash)) {
       // this is cryptographically secure
       return ref;
     }
@@ -303,13 +291,7 @@ export default class Git {
    * Given a list of tags/branches from git, check if they match an input range.
    */
 
-  async findResolution(range: ?string, tags: Array<string>): Promise<string> {
-    // If there are no tags and target is *, fallback to the latest commit on master
-    // or if we have no target.
-    if (!range || (!tags.length && range === '*')) {
-      return 'master';
-    }
-
+  async findResolution(range: string, tags: Array<string>): Promise<string> {
     return (
       (await this.config.resolveConstraints(
         tags.filter((tag): boolean => !!semver.valid(tag, this.config.looseSemver)),
@@ -385,20 +367,37 @@ export default class Git {
    */
   async init(): Promise<string> {
     this.gitUrl = await Git.secureGitUrl(this.gitUrl, this.hash, this.reporter);
+
+    await this.setRefRemote();
+
     // check capabilities
-    if (await Git.hasArchiveCapability(this.gitUrl)) {
+    if (this.ref !== '' && (await Git.hasArchiveCapability(this.gitUrl))) {
       this.supportsArchive = true;
     } else {
       await this.fetch();
     }
 
-    return this.setRefRemote();
+    return this.hash;
   }
 
   async setRefRemote(): Promise<string> {
     const stdout = await Git.spawn(['ls-remote', '--tags', '--heads', this.gitUrl.repository]);
-    const refs = Git.parseRefs(stdout);
+    const refs = parseRefs(stdout);
     return this.setRef(refs);
+  }
+
+  setRefHosted(hostedRefsList: string): Promise<string> {
+    const refs = parseRefs(hostedRefsList);
+    return this.setRef(refs);
+  }
+
+  async useDefaultBranch(): Promise<void> {
+    const stdout = await Git.spawn(['ls-remote', '--symref', this.gitUrl.repository, 'HEAD']);
+    const lines = stdout.split('\n');
+    const [, ref] = lines[0].split(/\s+/);
+    const [hash] = lines[1].split(/\s+/);
+    this.ref = ref;
+    this.hash = hash;
   }
 
   /**
@@ -407,67 +406,21 @@ export default class Git {
 
   async setRef(refs: GitRefs): Promise<string> {
     // get commit ref
-    const {hash} = this;
+    const {hash: version} = this;
 
-    const names = Object.keys(refs);
-
-    if (Git.isCommitHash(hash)) {
-      for (const name in refs) {
-        if (refs[name] === hash) {
-          this.ref = name;
-          return hash;
-        }
-      }
-
-      // `git archive` only accepts a treeish and we have no ref to this commit
-      this.supportsArchive = false;
-
-      if (!this.fetched) {
-        // in fact, `git archive` can't be used, and we haven't fetched the project yet. Do it now.
-        await this.fetch();
-      }
-      return (this.ref = this.hash = hash);
+    const resolvedResult = await resolveVersion(this.config, version, refs);
+    if (resolvedResult === false) {
+      throw new MessageError(
+        this.reporter.lang('couldntFindMatch', version, Object.keys(refs).join(','), this.gitUrl.repository),
+      );
     }
 
-    const ref = await this.findResolution(hash, names);
-    const commit = refs[ref];
-    if (commit) {
-      this.ref = ref;
-      return (this.hash = commit);
+    if (resolvedResult.defaultBranch) {
+      await this.useDefaultBranch();
     } else {
-      throw new MessageError(this.reporter.lang('couldntFindMatch', ref, names.join(','), this.gitUrl.repository));
+      this.hash = resolvedResult.sha;
+      this.ref = resolvedResult.ref || '';
     }
-  }
-
-  /**
-   * Parse Git ref lines into hash of tag names to SHA hashes
-   */
-
-  static parseRefs(stdout: string): GitRefs {
-    // store references
-    const refs = {};
-
-    // line delimited
-    const refLines = stdout.split('\n');
-
-    for (const line of refLines) {
-      const match = gitRefLineRegex.exec(line);
-
-      if (match) {
-        const [, sha, tagName] = match;
-
-        // As documented in gitrevisions:
-        //   https://www.kernel.org/pub/software/scm/git/docs/gitrevisions.html#_specifying_revisions
-        // "A suffix ^ followed by an empty brace pair means the object could be a tag,
-        //   and dereference the tag recursively until a non-tag object is found."
-        // In other words, the hash without ^{} is the hash of the tag,
-        //   and the hash with ^{} is the hash of the commit at which the tag was made.
-        const name = removeSuffix(tagName, '^{}');
-
-        refs[name] = sha;
-      }
-    }
-
-    return refs;
+    return this.hash;
   }
 }
