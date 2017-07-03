@@ -2,7 +2,9 @@
 
 import type Config from '../config.js';
 import type {Reporter} from '../reporters/index.js';
+import type {ResolvedHash} from './git-ref-resolver.js';
 import {MessageError, SecurityError} from '../errors.js';
+import GitRefResolver from './git-ref-resolver.js';
 import {removeSuffix} from './misc.js';
 import * as crypto from './crypto.js';
 import * as child from './child.js';
@@ -17,7 +19,7 @@ const tarStream = require('tar-stream');
 const url = require('url');
 import {createWriteStream} from 'fs';
 
-type GitRefs = {
+export type GitRefs = {
   [name: string]: string,
 };
 
@@ -27,7 +29,7 @@ type GitUrl = {
   repository: string, // git-specific "URL"
 };
 
-const supportsArchiveCache: {[key: string]: boolean} = map({
+const supportsArchiveCache: { [key: string]: boolean } = map({
   'github.com': false, // not support, doubt they will ever support it
 });
 
@@ -41,8 +43,8 @@ const env = {
 
 // This regex is designed to match output from git of the style:
 //   ebeb6eafceb61dd08441ffe086c77eb472842494  refs/tags/v0.21.0
-// and extract the hash and tag name as capture groups
-const gitRefLineRegex = /^([a-fA-F0-9]+)\s+(?:[^/]+\/){2}(.*)$/;
+// and extract the hash and ref name as capture groups
+const gitRefLineRegex = /^([a-fA-F0-9]+)\s+(.*)$/;
 
 export default class Git {
   constructor(config: Config, gitUrl: GitUrl, hash: string) {
@@ -303,13 +305,7 @@ export default class Git {
    * Given a list of tags/branches from git, check if they match an input range.
    */
 
-  async findResolution(range: ?string, tags: Array<string>): Promise<string> {
-    // If there are no tags and target is *, fallback to the latest commit on master
-    // or if we have no target.
-    if (!range || (!tags.length && range === '*')) {
-      return 'master';
-    }
-
+  async findResolution(range: string, tags: Array<string>): Promise<string> {
     return (
       (await this.config.resolveConstraints(
         tags.filter((tag): boolean => !!semver.valid(tag, this.config.looseSemver)),
@@ -385,14 +381,17 @@ export default class Git {
    */
   async init(): Promise<string> {
     this.gitUrl = await Git.secureGitUrl(this.gitUrl, this.hash, this.reporter);
+
+    this.setRefRemote();
+
     // check capabilities
-    if (await Git.hasArchiveCapability(this.gitUrl)) {
+    if (this.ref !== '' && await Git.hasArchiveCapability(this.gitUrl)) {
       this.supportsArchive = true;
     } else {
       await this.fetch();
     }
 
-    return this.setRefRemote();
+    return this.hash;
   }
 
   async setRefRemote(): Promise<string> {
@@ -401,42 +400,37 @@ export default class Git {
     return this.setRef(refs);
   }
 
+  async useDefaultBranch(): Promise<void> {
+    const stdout = await Git.spawn(['ls-remote', '--symref', this.gitUrl.repository, 'HEAD']);
+    const lines = stdout.split('\n');
+    const [, ref] = lines[0].split(/\s+/);
+    const [hash] = lines[1].split(/\s+/);
+    this.ref = ref;
+    this.hash = hash;
+  }
+
   /**
    * TODO description
    */
 
   async setRef(refs: GitRefs): Promise<string> {
     // get commit ref
-    const {hash} = this;
+    const {hash: version} = this;
 
-    const names = Object.keys(refs);
-
-    if (Git.isCommitHash(hash)) {
-      for (const name in refs) {
-        if (refs[name] === hash) {
-          this.ref = name;
-          return hash;
-        }
-      }
-
-      // `git archive` only accepts a treeish and we have no ref to this commit
-      this.supportsArchive = false;
-
-      if (!this.fetched) {
-        // in fact, `git archive` can't be used, and we haven't fetched the project yet. Do it now.
-        await this.fetch();
-      }
-      return (this.ref = this.hash = hash);
+    const gitRefResolver = new GitRefResolver(this.config, version, refs);
+    const resolution = await gitRefResolver.resolve();
+    if (resolution === false) {
+      throw new MessageError(
+        this.reporter.lang('couldntFindMatch', version, Object.keys(refs).join(','), this.gitUrl.repository));
     }
 
-    const ref = await this.findResolution(hash, names);
-    const commit = refs[ref];
-    if (commit) {
-      this.ref = ref;
-      return (this.hash = commit);
+    if (resolution.defaultBranch) {
+      await this.useDefaultBranch();
     } else {
-      throw new MessageError(this.reporter.lang('couldntFindMatch', ref, names.join(','), this.gitUrl.repository));
+      this.hash = (resolution: ResolvedHash).hash;
+      this.ref = (resolution: ResolvedHash).ref || '';
     }
+    return this.hash;
   }
 
   /**
