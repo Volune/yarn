@@ -391,13 +391,35 @@ export default class Git {
     return this.setRef(refs);
   }
 
-  async useDefaultBranch(): Promise<void> {
+  async useDefaultBranchWithSymref(): Promise<void> {
     const stdout = await Git.spawn(['ls-remote', '--symref', this.gitUrl.repository, 'HEAD']);
     const lines = stdout.split('\n');
     const [, ref] = lines[0].split(/\s+/);
-    const [hash] = lines[1].split(/\s+/);
+    const [sha] = lines[1].split(/\s+/);
     this.ref = ref;
-    this.hash = hash;
+    this.hash = sha;
+  }
+
+  async useDefaultBranchWithLegacyGit(refs: GitRefs): Promise<void> {
+    const stdout = await Git.spawn(['ls-remote', this.gitUrl.repository, 'HEAD']);
+    const [sha] = stdout.split(/\s+/);
+    const resolvedResult = await resolveVersion(this.config, sha, refs);
+    if (resolvedResult !== false && !resolvedResult.defaultBranch) {
+      this.hash = resolvedResult.sha;
+      this.ref = resolvedResult.ref || '';
+    } else {
+      this.hash = sha;
+      this.ref = '';
+    }
+  }
+
+  async useDefaultBranch(refs: GitRefs): Promise<void> {
+    try {
+      await this.useDefaultBranchWithSymref();
+    } catch (err) {
+      // older versions of git don't support "--symref"
+      await this.useDefaultBranchWithLegacyGit(refs);
+    }
   }
 
   /**
@@ -416,7 +438,7 @@ export default class Git {
     }
 
     if (resolvedResult.defaultBranch) {
-      await this.useDefaultBranch();
+      await this.useDefaultBranch(refs);
     } else {
       this.hash = resolvedResult.sha;
       this.ref = resolvedResult.ref || '';
