@@ -4,6 +4,7 @@ import {resolve} from 'path';
 
 import type Config from '../../config.js';
 import {MessageError} from '../../errors.js';
+import {linkBin} from '../../package-linker.js';
 import {registryNames} from '../../registries/index.js';
 import type {Reporter} from '../../reporters/index.js';
 import * as child from '../../util/child.js';
@@ -51,7 +52,10 @@ export async function run(config: Config, reporter: Reporter, flags: Object, arg
       throw new MessageError(reporter.lang('createInvalidBin', packageName));
     }
 
-    await child.spawn(binPath, rest, {stdio: `inherit`});
+    const linkedBinPath = config.getTemp(`create-bin-${packageName}`);
+    await linkBin(binPath, linkedBinPath);
+
+    await child.spawn(linkedBinPath, [...rest], {stdio: `inherit`, shell: true});
     return;
   }
 
