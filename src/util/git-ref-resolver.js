@@ -20,7 +20,7 @@ const REF_BRANCH_PREFIX = 'refs/heads/';
 // This regex is designed to match output from git of the style:
 //   ebeb6eafceb61dd08441ffe086c77eb472842494  refs/tags/v0.21.0
 // and extract the hash and ref name as capture groups
-const gitRefLineRegex = /^([a-fA-F0-9]+)\s+(.*)$/;
+const gitRefLineRegex = /^([a-fA-F0-9]+)\s+(refs\/(?:tags|heads)\/.*)$/;
 
 const refNameRegexp = /^refs\/(tags|heads)\/(.+)$/;
 

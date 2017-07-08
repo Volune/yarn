@@ -105,6 +105,13 @@ de43f4a993d1e08cd930ee22ecb2bac727f53449  refs/tags/v0.21.0-pre`),
   });
 
   expect(
+    parseRefs(`ebeb6eafceb61dd08441ffe086c77eb472842494  refs/tags/tag
+70e76d174b0c7d001d2cd608a16c94498496e92d refs/merge-requests/38/head`),
+  ).toMatchObject({
+    'refs/tags/tag': 'ebeb6eafceb61dd08441ffe086c77eb472842494',
+  });
+
+  expect(
     parseRefs(`**********
 This is a custom response header
   as described in: https://github.com/yarnpkg/yarn/issues/3325
