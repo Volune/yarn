@@ -48,6 +48,19 @@ async function mockConstants(base: Config, mocks: Object, cb: (config: Config) =
 beforeEach(request.__resetAuthedRequests);
 afterEach(request.__resetAuthedRequests);
 
+test.concurrent('installing a package with a renamed file should not delete it', async () => {
+  await runInstall({}, 'case-sensitivity', async (config, reporter): Promise<void> => {
+    const pkgJson = await fs.readJson(`${config.cwd}/package.json`);
+    pkgJson.dependencies['pkg'] = 'file:./pkg-b';
+    await fs.writeFile(`${config.cwd}/package.json`, JSON.stringify(pkgJson));
+
+    const reInstall = new Install({}, config, reporter, await Lockfile.fromDirectory(config.cwd));
+    await reInstall.init();
+
+    expect(await fs.exists(`${config.cwd}/node_modules/pkg/state.js`)).toEqual(true);
+  });
+});
+
 test.concurrent('properly find and save build artifacts', async () => {
   await runInstall({}, 'artifacts-finds-and-saves', async (config): Promise<void> => {
     const integrity = await fs.readJson(path.join(config.cwd, 'node_modules', constants.INTEGRITY_FILENAME));
@@ -151,6 +164,31 @@ test.concurrent(
     });
   },
 );
+
+test.concurrent('replace the symlink when it changes, when using the link: protocol', async () => {
+  await runInstall({}, 'install-link', async (config, reporter): Promise<void> => {
+    const lockfile = await Lockfile.fromDirectory(config.cwd);
+
+    const pkgJson = await fs.readJson(`${config.cwd}/package.json`);
+    pkgJson.dependencies['test-missing'] = 'link:barbaz';
+    await fs.writeFile(`${config.cwd}/package.json`, JSON.stringify(pkgJson));
+
+    const reInstall = new Install({}, config, reporter, lockfile);
+    await reInstall.init();
+
+    const expectPath = path.join(config.cwd, 'node_modules', 'test-missing');
+
+    const stat = await fs.lstat(expectPath);
+    expect(stat.isSymbolicLink()).toEqual(true);
+
+    const target = await fs.readlink(expectPath);
+    if (process.platform !== 'win32') {
+      expect(target).toEqual('../barbaz');
+    } else {
+      expect(target).toMatch(/[\\\/]barbaz[\\\/]$/);
+    }
+  });
+});
 
 test('changes the cache path when bumping the cache version', async () => {
   await runInstall({}, 'install-github', async (config): Promise<void> => {
@@ -471,6 +509,12 @@ test.concurrent('install should run install scripts in the order of dependencies
   });
 });
 
+test.concurrent('install with comments in manifest', (): Promise<void> => {
+  return runInstall({noLockfile: true}, 'install-with-comments', async config => {
+    expect(await fs.readFile(path.join(config.cwd, 'node_modules', 'foo', 'index.js'))).toEqual('foobar;\n');
+  });
+});
+
 test.concurrent('run install scripts in the order when one dependency does not have install script', (): Promise<
   void,
 > => {
@@ -598,7 +642,7 @@ test.concurrent('offline mirror can be enabled from parent dir', (): Promise<voi
   };
   return runInstall({}, fixture, async (config, reporter) => {
     const rawLockfile = await fs.readFile(path.join(config.cwd, 'yarn.lock'));
-    const lockfile = parse(rawLockfile);
+    const {object: lockfile} = parse(rawLockfile);
     expect(lockfile['mime-types@2.1.14'].resolved).toEqual(
       'https://registry.yarnpkg.com/mime-types/-/mime-types-2.1.14.tgz#f7ef7d97583fcaf3b7d282b6f8b5679dab1e94ee',
     );
@@ -613,7 +657,7 @@ test.concurrent('offline mirror can be enabled from parent dir, with merging of 
   };
   return runInstall({}, fixture, async (config, reporter) => {
     const rawLockfile = await fs.readFile(path.join(config.cwd, 'yarn.lock'));
-    const lockfile = parse(rawLockfile);
+    const {object: lockfile} = parse(rawLockfile);
     expect(lockfile['mime-types@2.1.14'].resolved).toEqual(
       'https://registry.yarnpkg.com/mime-types/-/mime-types-2.1.14.tgz#f7ef7d97583fcaf3b7d282b6f8b5679dab1e94ee',
     );
@@ -628,7 +672,7 @@ test.concurrent('offline mirror can be disabled locally', (): Promise<void> => {
   };
   return runInstall({}, fixture, async (config, reporter) => {
     const rawLockfile = await fs.readFile(path.join(config.cwd, 'yarn.lock'));
-    const lockfile = parse(rawLockfile);
+    const {object: lockfile} = parse(rawLockfile);
     expect(lockfile['mime-types@2.1.14'].resolved).toEqual(
       'https://registry.yarnpkg.com/mime-types/-/mime-types-2.1.14.tgz#f7ef7d97583fcaf3b7d282b6f8b5679dab1e94ee',
     );
@@ -890,5 +934,17 @@ test.skip('unbound transitive dependencies should not conflict with top level de
     expect((await fs.readJson(path.join(config.cwd, 'node_modules', 'left-pad', 'package.json'))).version).toEqual(
       '1.0.0',
     );
+  });
+});
+
+test.concurrent('top level patterns should match after install', (): Promise<void> => {
+  return runInstall({}, 'top-level-pattern-check', async (config, reporter) => {
+    let integrityError = false;
+    try {
+      await check(config, reporter, {integrity: true}, []);
+    } catch (err) {
+      integrityError = true;
+    }
+    expect(integrityError).toBe(false);
   });
 });
