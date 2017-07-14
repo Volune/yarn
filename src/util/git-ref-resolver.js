@@ -16,6 +16,7 @@ export const isCommitSha = (target: string): boolean => Boolean(target) && /^[a-
 
 const REF_TAG_PREFIX = 'refs/tags/';
 const REF_BRANCH_PREFIX = 'refs/heads/';
+const DEFAULT_BRANCH: DefaultBranch = Object.freeze({defaultBranch: true});
 
 // This regex is designed to match output from git of the style:
 //   ebeb6eafceb61dd08441ffe086c77eb472842494  refs/tags/v0.21.0
@@ -38,26 +39,22 @@ class GitRefResolver {
 
   async resolve(): Promise<DefaultBranch | ResolvedSha | false> {
     const testFunctions = [
-      () => this.tryVersionAsGitCommit(),
-      () => (this.version === '' ? this.useDefaultBranch() : false),
-      () => this.tryVersionAsFullRef(),
-      () => this.tryVersionAsTagName(),
-      () => this.tryVersionAsBranchName(),
-      () => this.tryVersionAsTagSemver(),
-      () => this.tryVersionAsBranchSemver(),
-      () => (this.version === '*' ? this.useDefaultBranch() : false),
+      this.tryVersionAsGitCommit,
+      () => this.version === '' && DEFAULT_BRANCH,
+      this.tryVersionAsFullRef,
+      this.tryVersionAsTagName,
+      this.tryVersionAsBranchName,
+      this.tryVersionAsTagSemver,
+      this.tryVersionAsBranchSemver,
+      () => this.version === '*' && DEFAULT_BRANCH,
     ];
     for (const testFunction of testFunctions) {
-      const result = await testFunction();
+      const result = await testFunction.call(this);
       if (result !== false) {
         return result;
       }
     }
     return false;
-  }
-
-  useDefaultBranch(): DefaultBranch {
-    return {defaultBranch: true};
   }
 
   tryVersionAsGitCommit(): ResolvedSha | false {
@@ -102,24 +99,25 @@ class GitRefResolver {
   }
 
   getSemverNames(): Names {
-    if (!this.names) {
-      const names = (this.names = {
-        tags: [],
-        branches: [],
-      });
-      for (const ref in this.refs) {
-        const match = refNameRegexp.exec(ref);
-        if (match) {
-          const [, type, name] = match;
-          if (semver.valid(name, this.config.looseSemver)) {
-            switch (type) {
-              case 'tags':
-                names.tags.push(name);
-                break;
-              case 'heads':
-                names.branches.push(name);
-                break;
-            }
+    if (this.names) {
+      return this.names;
+    }
+    const names = (this.names = {
+      tags: [],
+      branches: [],
+    });
+    for (const ref in this.refs) {
+      const match = refNameRegexp.exec(ref);
+      if (match) {
+        const [, type, name] = match;
+        if (semver.valid(name, this.config.looseSemver)) {
+          switch (type) {
+            case 'tags':
+              names.tags.push(name);
+              break;
+            case 'heads':
+              names.branches.push(name);
+              break;
           }
         }
       }
