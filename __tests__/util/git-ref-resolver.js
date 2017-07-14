@@ -28,6 +28,11 @@ test('resolveVersion', async () => {
     sha: '003ae60',
     ref: undefined,
   });
+  // Test uppercase
+  expect(await resolve('003AE60')).toEqual({
+    sha: '003ae60',
+    ref: undefined,
+  });
   expect(await resolve('4cff93aa6e8270c3bec988af464d28a164bc3cb2')).toEqual({
     sha: '4cff93aa6e8270c3bec988af464d28a164bc3cb2',
     ref: 'refs/heads/3.3',

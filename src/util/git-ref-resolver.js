@@ -61,16 +61,17 @@ class GitRefResolver {
   }
 
   tryVersionAsGitCommit(): ResolvedSha | false {
-    if (isCommitSha(this.version)) {
-      for (const ref in this.refs) {
-        const sha = this.refs[ref];
-        if (sha.startsWith(this.version)) {
-          return {sha, ref};
-        }
-      }
-      return {sha: this.version, ref: undefined};
+    const version = this.version.toLowerCase();
+    if (!isCommitSha(version)) {
+      return false;
     }
-    return false;
+    for (const ref in this.refs) {
+      const sha = this.refs[ref];
+      if (sha.startsWith(version)) {
+        return {sha, ref};
+      }
+    }
+    return {sha: version, ref: undefined};
   }
 
   tryRef(ref: string): ResolvedSha | false {
