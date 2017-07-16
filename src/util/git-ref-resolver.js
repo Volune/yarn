@@ -15,7 +15,7 @@ export type ResolveVersionOptions = {
 };
 export type DefaultBranch = {defaultBranch: true};
 export type ResolvedSha = {sha: string, ref: ?string};
-type ResolveResult = DefaultBranch | ResolvedSha | false;
+type ResolveResult = DefaultBranch | ?ResolvedSha;
 type Names = {tags: Array<string>, branches: Array<string>};
 
 export const isCommitSha = (target: string): boolean => Boolean(target) && /^[a-f0-9]{5,40}$/.test(target);
@@ -31,10 +31,10 @@ const gitRefLineRegex = /^([a-fA-F0-9]+)\s+(refs\/(?:tags|heads)\/.*)$/;
 
 const refNameRegexp = /^refs\/(tags|heads)\/(.+)$/;
 
-const tryVersionAsGitCommit = ({version, refs}: ResolveVersionOptions): ResolvedSha | false => {
+const tryVersionAsGitCommit = ({version, refs}: ResolveVersionOptions): ?ResolvedSha => {
   const lowercaseVersion = version.toLowerCase();
   if (!isCommitSha(lowercaseVersion)) {
-    return false;
+    return null;
   }
   for (const ref in refs) {
     const sha = refs[ref];
@@ -45,34 +45,34 @@ const tryVersionAsGitCommit = ({version, refs}: ResolveVersionOptions): Resolved
   return {sha: lowercaseVersion, ref: undefined};
 };
 
-const tryEmptyVersionAsDefaultBranch = ({version}: ResolveVersionOptions): DefaultBranch | false =>
-  version === '' && DEFAULT_BRANCH;
-const tryWildcardVersionAsDefaultBranch = ({version}: ResolveVersionOptions): DefaultBranch | false =>
-  version === '*' && DEFAULT_BRANCH;
+const tryEmptyVersionAsDefaultBranch = ({version}: ResolveVersionOptions): ?DefaultBranch =>
+  version === '' ? DEFAULT_BRANCH : null;
+const tryWildcardVersionAsDefaultBranch = ({version}: ResolveVersionOptions): ?DefaultBranch =>
+  version === '*' ? DEFAULT_BRANCH : null;
 
-const tryRef = (refs: GitRefs, ref: string): ResolvedSha | false => {
+const tryRef = (refs: GitRefs, ref: string): ?ResolvedSha => {
   if (refs[ref]) {
     return {
       sha: refs[ref],
       ref,
     };
   }
-  return false;
+  return null;
 };
 
-const tryVersionAsFullRef = ({version, refs}: ResolveVersionOptions): ResolvedSha | false => {
+const tryVersionAsFullRef = ({version, refs}: ResolveVersionOptions): ?ResolvedSha => {
   if (version.startsWith('refs/')) {
     return tryRef(refs, version);
   }
-  return false;
+  return null;
 };
 
-const tryVersionAsTagName = ({version, refs}: ResolveVersionOptions): ResolvedSha | false => {
+const tryVersionAsTagName = ({version, refs}: ResolveVersionOptions): ?ResolvedSha => {
   const ref = `${REF_TAG_PREFIX}${version}`;
   return tryRef(refs, ref);
 };
 
-const tryVersionAsBranchName = ({version, refs}: ResolveVersionOptions): ResolvedSha | false => {
+const tryVersionAsBranchName = ({version, refs}: ResolveVersionOptions): ?ResolvedSha => {
   const ref = `${REF_BRANCH_PREFIX}${version}`;
   return tryRef(refs, ref);
 };
@@ -107,40 +107,40 @@ const findSemver = (version: string, config: Config, namesList: Array<string>): 
 const tryVersionAsTagSemver = async (
   {version, config, refs}: ResolveVersionOptions,
   names: Names,
-): Promise<ResolvedSha | false> => {
+): Promise<?ResolvedSha> => {
   const result = await findSemver(version, config, names.tags);
   if (result) {
     const ref = `${REF_TAG_PREFIX}${result}`;
     return {sha: refs[ref], ref};
   }
-  return false;
+  return null;
 };
 
 const tryVersionAsBranchSemver = async (
   {version, config, refs}: ResolveVersionOptions,
   names: Names,
-): Promise<ResolvedSha | false> => {
+): Promise<?ResolvedSha> => {
   const result = await findSemver(version, config, names.branches);
   if (result) {
     const ref = `${REF_BRANCH_PREFIX}${result}`;
     return {sha: refs[ref], ref};
   }
-  return false;
+  return null;
 };
 
-const tryVersionAsSemverRange = async (options: ResolveVersionOptions): Promise<ResolvedSha | false> => {
+const tryVersionAsSemverRange = async (options: ResolveVersionOptions): Promise<?ResolvedSha> => {
   const names = computeSemverNames(options);
   return (await tryVersionAsTagSemver(options, names)) || tryVersionAsBranchSemver(options, names);
 };
 
-const VERSION_RESOLUTION_STEPS: [(ResolveVersionOptions) => ResolveResult | Promise<ResolveResult>] = [
+const VERSION_RESOLUTION_STEPS: Array<(ResolveVersionOptions) => ResolveResult | Promise<ResolveResult>> = [
   tryVersionAsGitCommit,
   tryEmptyVersionAsDefaultBranch,
   tryVersionAsFullRef,
   tryVersionAsTagName,
-  // tryVersionAsBranchName,
-  // tryVersionAsSemverRange,
-  // tryWildcardVersionAsDefaultBranch,
+  tryVersionAsBranchName,
+  tryVersionAsSemverRange,
+  tryWildcardVersionAsDefaultBranch,
 ];
 
 /**
@@ -154,7 +154,7 @@ export const resolveVersion = async (options: ResolveVersionOptions): Promise<Re
       return result;
     }
   }
-  return false;
+  return null;
 };
 
 /**

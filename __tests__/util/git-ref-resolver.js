@@ -17,7 +17,7 @@ test('resolveVersion', async () => {
   };
   const emptyRefs = {};
 
-  const resolve = version => resolveVersion(config, version, refs);
+  const resolve = version => resolveVersion({config, version, refs});
 
   expect(await resolve('')).toEqual({defaultBranch: true});
   expect(await resolve('003ae6063f23a4184736610361f14438a3257c83')).toEqual({
@@ -83,7 +83,7 @@ test('resolveVersion', async () => {
     ref: 'refs/tags/v2.2.0',
   });
   // Test * without tags, use default branch
-  expect(await resolveVersion(config, '*', emptyRefs)).toEqual({defaultBranch: true});
+  expect(await resolveVersion({config, version: '*', refs: emptyRefs})).toEqual({defaultBranch: true});
 });
 
 test('isCommitSha', () => {

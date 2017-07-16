@@ -403,7 +403,7 @@ export default class Git {
   async useDefaultBranchWithLegacyGit(refs: GitRefs): Promise<void> {
     const stdout = await Git.spawn(['ls-remote', this.gitUrl.repository, 'HEAD']);
     const [sha] = stdout.split(/\s+/);
-    const resolvedResult = await resolveVersion(this.config, sha, refs);
+    const resolvedResult = await resolveVersion({config: this.config, version: sha, refs});
     if (resolvedResult !== false && !resolvedResult.defaultBranch) {
       this.hash = resolvedResult.sha;
       this.ref = resolvedResult.ref || '';
@@ -430,8 +430,8 @@ export default class Git {
     // get commit ref
     const {hash: version} = this;
 
-    const resolvedResult = await resolveVersion(this.config, version, refs);
-    if (resolvedResult === false) {
+    const resolvedResult = await resolveVersion({config: this.config, version, refs});
+    if (!resolvedResult) {
       throw new MessageError(
         this.reporter.lang('couldntFindMatch', version, Object.keys(refs).join(','), this.gitUrl.repository),
       );
