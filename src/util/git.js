@@ -2,10 +2,10 @@
 
 import type Config from '../config.js';
 import type {Reporter} from '../reporters/index.js';
-import type {ResolvedSha, GitRefResolvingInterface, GitRefs} from './git/git-ref-resolver.js';
 import {MessageError, SecurityError} from '../errors.js';
 import {spawn as spawnGit} from './git/git-spawn.js';
-import {resolveVersion, isCommitSha, parseRefs} from './git/git-ref-resolver.js';
+import {resolveVersion, isCommitSha} from './git/git-ref-resolver.js';
+import BaseGitRepository from './git/base-git-repository.js';
 import * as crypto from './crypto.js';
 import * as fs from './fs.js';
 import map from './map.js';
@@ -27,7 +27,7 @@ const supportsArchiveCache: {[key: string]: boolean} = map({
   'github.com': false, // not support, doubt they will ever support it
 });
 
-export default class Git implements GitRefResolvingInterface {
+export default class Git {
   constructor(config: Config, gitUrl: GitUrl, hash: string) {
     this.supportsArchive = false;
     this.fetched = false;
@@ -37,6 +37,7 @@ export default class Git implements GitRefResolvingInterface {
     this.ref = hash;
     this.gitUrl = gitUrl;
     this.cwd = this.config.getTemp(crypto.hash(this.gitUrl.repository));
+    this.repository = Git.createGitRepository(this.config, this.gitUrl.repository);
   }
 
   supportsArchive: boolean;
@@ -47,6 +48,11 @@ export default class Git implements GitRefResolvingInterface {
   ref: string;
   cwd: string;
   gitUrl: GitUrl;
+  repository: BaseGitRepository;
+
+  static createGitRepository(config: Config, repository: string): BaseGitRepository {
+    return new BaseGitRepository(config, repository);
+  }
 
   /**
    * npm URLs contain a 'git+' scheme prefix, which is not understood by git.
@@ -100,10 +106,6 @@ export default class Git implements GitRefResolvingInterface {
       return (supportsArchiveCache[hostname] = supports);
     }
   }
-
-  /**
-   * Check if the input `target` is a 5-40 character hex commit hash.
-   */
 
   static async repoExists(ref: GitUrl): Promise<boolean> {
     try {
@@ -340,9 +342,10 @@ export default class Git implements GitRefResolvingInterface {
    * set the ref to match an input `target`.
    */
   async init(): Promise<string> {
+    // TODO we always resolve to a commit sha, is this "secureGitUrl" still required?
     this.gitUrl = await Git.secureGitUrl(this.gitUrl, this.hash, this.reporter);
 
-    await this.setRefRemote();
+    await this.setRef();
 
     // check capabilities
     if (this.ref !== '' && (await Git.hasArchiveCapability(this.gitUrl))) {
@@ -354,60 +357,17 @@ export default class Git implements GitRefResolvingInterface {
     return this.hash;
   }
 
-  async setRefRemote(): Promise<string> {
-    const stdout = await spawnGit(['ls-remote', '--tags', '--heads', this.gitUrl.repository]);
-    const refs = parseRefs(stdout);
-    return this.setRef(refs);
-  }
-
-  setRefHosted(hostedRefsList: string): Promise<string> {
-    const refs = parseRefs(hostedRefsList);
-    return this.setRef(refs);
-  }
-
-  async resolveDefaultBranch(): Promise<ResolvedSha> {
-    try {
-      const stdout = await spawnGit(['ls-remote', '--symref', this.gitUrl.repository, 'HEAD']);
-      const lines = stdout.split('\n');
-      const [, ref] = lines[0].split(/\s+/);
-      const [sha] = lines[1].split(/\s+/);
-      return {sha, ref};
-    } catch (err) {
-      // older versions of git don't support "--symref"
-      const stdout = await spawnGit(['ls-remote', this.gitUrl.repository, 'HEAD']);
-      const [sha] = stdout.split(/\s+/);
-      return {sha, ref: undefined};
-    }
-  }
-
-  async resolveCommit(shaToResolve: string): Promise<?ResolvedSha> {
-    try {
-      await this.fetch();
-      const revListArgs = ['rev-list', '-n', '1', '--no-abbrev-commit', '--format=oneline', shaToResolve];
-      const stdout = await spawnGit(revListArgs, {cwd: this.cwd});
-      const [sha] = stdout.split(/\s+/);
-      return {sha, ref: undefined};
-    } catch (err) {
-      // assuming commit not found, let's try something else
-      return null;
-    }
-  }
-
-  /**
-   * TODO description
-   */
-
-  async setRef(refs: GitRefs): Promise<string> {
+  async setRef(): Promise<string> {
     // get commit ref
     const {hash: version} = this;
 
     const resolvedResult = await resolveVersion({
       config: this.config,
-      git: this,
+      git: this.repository,
       version,
-      refs,
     });
-    if (!resolvedResult) {
+    if (resolvedResult.notFound) {
+      const refs = resolvedResult.refs;
       throw new MessageError(
         this.reporter.lang('couldntFindMatch', version, Object.keys(refs).join(','), this.gitUrl.repository),
       );

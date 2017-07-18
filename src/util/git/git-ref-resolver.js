@@ -5,20 +5,22 @@ import {removeSuffix} from '../misc.js';
 
 const semver = require('semver');
 
-export type ResolvedSha = {sha: string, ref: ?string};
-export interface GitRefResolvingInterface {
-  resolveDefaultBranch(): Promise<ResolvedSha>,
-  resolveCommit(sha: string): Promise<?ResolvedSha>,
-}
 export type GitRefs = {
   [name: string]: string,
 };
+export type ResolvedSha = {sha: string, ref: ?string};
+export type ShaNotFound = {notFound: true, refs: GitRefs};
+export interface GitRefResolvingInterface {
+  fetchRefsListing(): Promise<Array<string>>,
+  resolveDefaultBranch(): Promise<ResolvedSha>,
+  resolveCommit(sha: string): Promise<?ResolvedSha>,
+}
 export type ResolveVersionOptions = {
   version: string,
   config: Config,
   git: GitRefResolvingInterface,
-  refs: GitRefs,
 };
+type TestFunctionOptions = ResolveVersionOptions & {refs: GitRefs};
 type Names = {tags: Array<string>, branches: Array<string>};
 
 export const isCommitSha = (target: string): boolean => Boolean(target) && /^[a-f0-9]{5,40}$/.test(target);
@@ -33,7 +35,7 @@ const gitRefLineRegex = /^([a-fA-F0-9]+)\s+(refs\/(?:tags|heads)\/.*)$/;
 
 const refNameRegexp = /^refs\/(tags|heads)\/(.+)$/;
 
-const tryVersionAsGitCommit = ({version, refs, git}: ResolveVersionOptions): Promise<?ResolvedSha> => {
+const tryVersionAsGitCommit = ({version, refs, git}: TestFunctionOptions): Promise<?ResolvedSha> => {
   const lowercaseVersion = version.toLowerCase();
   if (!isCommitSha(lowercaseVersion)) {
     return Promise.resolve(null);
@@ -47,7 +49,7 @@ const tryVersionAsGitCommit = ({version, refs, git}: ResolveVersionOptions): Pro
   return git.resolveCommit(lowercaseVersion);
 };
 
-const tryWildcardVersionAsDefaultBranch = ({version, git}: ResolveVersionOptions): Promise<?ResolvedSha> =>
+const tryWildcardVersionAsDefaultBranch = ({version, git}: TestFunctionOptions): Promise<?ResolvedSha> =>
   version === '*' ? git.resolveDefaultBranch() : Promise.resolve(null);
 
 const tryRef = (refs: GitRefs, ref: string): ?ResolvedSha => {
@@ -60,24 +62,24 @@ const tryRef = (refs: GitRefs, ref: string): ?ResolvedSha => {
   return null;
 };
 
-const tryVersionAsFullRef = ({version, refs}: ResolveVersionOptions): ?ResolvedSha => {
+const tryVersionAsFullRef = ({version, refs}: TestFunctionOptions): ?ResolvedSha => {
   if (version.startsWith('refs/')) {
     return tryRef(refs, version);
   }
   return null;
 };
 
-const tryVersionAsTagName = ({version, refs}: ResolveVersionOptions): ?ResolvedSha => {
+const tryVersionAsTagName = ({version, refs}: TestFunctionOptions): ?ResolvedSha => {
   const ref = `${REF_TAG_PREFIX}${version}`;
   return tryRef(refs, ref);
 };
 
-const tryVersionAsBranchName = ({version, refs}: ResolveVersionOptions): ?ResolvedSha => {
+const tryVersionAsBranchName = ({version, refs}: TestFunctionOptions): ?ResolvedSha => {
   const ref = `${REF_BRANCH_PREFIX}${version}`;
   return tryRef(refs, ref);
 };
 
-const computeSemverNames = ({config, refs}: ResolveVersionOptions): Names => {
+const computeSemverNames = ({config, refs}: TestFunctionOptions): Names => {
   const names = {
     tags: [],
     branches: [],
@@ -105,7 +107,7 @@ const findSemver = (version: string, config: Config, namesList: Array<string>): 
   config.resolveConstraints(namesList, version);
 
 const tryVersionAsTagSemver = async (
-  {version, config, refs}: ResolveVersionOptions,
+  {version, config, refs}: TestFunctionOptions,
   names: Names,
 ): Promise<?ResolvedSha> => {
   const result = await findSemver(version, config, names.tags);
@@ -117,7 +119,7 @@ const tryVersionAsTagSemver = async (
 };
 
 const tryVersionAsBranchSemver = async (
-  {version, config, refs}: ResolveVersionOptions,
+  {version, config, refs}: TestFunctionOptions,
   names: Names,
 ): Promise<?ResolvedSha> => {
   const result = await findSemver(version, config, names.branches);
@@ -128,12 +130,12 @@ const tryVersionAsBranchSemver = async (
   return null;
 };
 
-const tryVersionAsSemverRange = async (options: ResolveVersionOptions): Promise<?ResolvedSha> => {
+const tryVersionAsSemverRange = async (options: TestFunctionOptions): Promise<?ResolvedSha> => {
   const names = computeSemverNames(options);
   return (await tryVersionAsTagSemver(options, names)) || tryVersionAsBranchSemver(options, names);
 };
 
-const VERSION_RESOLUTION_STEPS: Array<(ResolveVersionOptions) => ?ResolvedSha | Promise<?ResolvedSha>> = [
+const VERSION_RESOLUTION_STEPS: Array<(TestFunctionOptions) => ?ResolvedSha | Promise<?ResolvedSha>> = [
   tryVersionAsGitCommit,
   tryVersionAsFullRef,
   tryVersionAsTagName,
@@ -147,33 +149,35 @@ const VERSION_RESOLUTION_STEPS: Array<(ResolveVersionOptions) => ?ResolvedSha | 
  * Returns null if the version cannot be resolved to any commit
  */
 
-export const resolveVersion = async (options: ResolveVersionOptions): Promise<?ResolvedSha> => {
+export const resolveVersion = async (options: ResolveVersionOptions): Promise<ResolvedSha | ShaNotFound> => {
   const {version, git} = options;
   if (version.trim() === '') {
     return git.resolveDefaultBranch();
   }
 
+  const refs = parseRefs(await git.fetchRefsListing());
+  const testFunctionOptions: TestFunctionOptions = {
+    ...options,
+    refs,
+  };
   for (const testFunction of VERSION_RESOLUTION_STEPS) {
-    const result = await testFunction(options);
-    if (result !== null) {
+    const result = await testFunction(testFunctionOptions);
+    if (result != null) {
       return result;
     }
   }
-  return null;
+  return {notFound: true, refs};
 };
 
 /**
  * Parse Git ref lines into hash of ref names to SHA hashes
  */
 
-export const parseRefs = (stdout: string): GitRefs => {
+export const parseRefs = (refsListing: Array<string>): GitRefs => {
   // store references
   const refs = {};
 
-  // line delimited
-  const refLines = stdout.split('\n');
-
-  for (const line of refLines) {
+  for (const line of refsListing) {
     const match = gitRefLineRegex.exec(line);
 
     if (match) {
