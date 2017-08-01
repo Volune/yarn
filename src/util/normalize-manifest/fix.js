@@ -4,7 +4,7 @@ import {DEPENDENCY_TYPES} from '../../constants';
 import type {Reporter} from '../../reporters/index.js';
 import {isValidLicense} from './util.js';
 import {normalizePerson, extractDescription} from './util.js';
-import {hostedGitFragmentToGitUrl} from '../../resolvers/index.js';
+import Git from '../../util/git.js';
 import inferLicense from './infer-license.js';
 import * as fs from '../fs.js';
 
@@ -131,7 +131,7 @@ export default (async function(
 
   // explode info.repository.url if it's a hosted git shorthand
   if (repo && typeof repo === 'object' && typeof repo.url === 'string') {
-    repo.url = hostedGitFragmentToGitUrl(repo.url, reporter);
+    repo.url = Git.resolveHostedGitPattern(repo.url, reporter)[0];
   }
 
   // allow bugs to be specified as a string, expand it to an object with a single url prop

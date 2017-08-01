@@ -66,6 +66,26 @@ test('getExoticResolver returns Git Resolver for https://... pattern with .git e
   expect(getExoticResolver(pattern)).toEqual(GitResolver);
 });
 
+test('getExoticResolver returns Git Resolver for git@bitbucket.org:team/repo.git pattern', () => {
+  const pattern = 'git@bitbucket.org:team/repo.git';
+  expect(getExoticResolver(pattern)).toEqual(GitResolver);
+});
+
+test('getExoticResolver returns Git Resolver for github:user/repo pattern', () => {
+  const pattern = 'github:user/repo';
+  expect(getExoticResolver(pattern)).toEqual(GitResolver);
+});
+
+test('getExoticResolver returns Git Resolver for user/repo pattern', () => {
+  const pattern = 'user/repo';
+  expect(getExoticResolver(pattern)).toEqual(GitResolver);
+});
+
+test('getExoticResolver returns Git Resolver for bitbucket:team/repo pattern', () => {
+  const pattern = 'bitbucket:team/repo';
+  expect(getExoticResolver(pattern)).toEqual(GitResolver);
+});
+
 test('getExoticResolver returns Tarball Resolver for http://... pattern', () => {
   const pattern = 'http://hostname/path/file.tgz';
   expect(getExoticResolver(pattern)).toEqual(TarballResolver);

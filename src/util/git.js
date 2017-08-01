@@ -17,11 +17,80 @@ const tarStream = require('tar-stream');
 const url = require('url');
 import {createWriteStream} from 'fs';
 
-type GitUrl = {
+export type ExplodedFragment = {
+  user: string,
+  repo: string,
+  hash: string,
+};
+export type GitUrl = {
   protocol: string, // parsed from URL
   hostname: ?string,
   repository: string, // git-specific "URL"
+  hostedGit?: ExplodedFragment,
 };
+type TemplateArgs = ExplodedFragment & {
+  hostname: string,
+  urlHash: string,
+};
+type HostedGitConfiguration = {
+  protocol: string,
+  defaultHostname: string,
+  hostnames: Set<string>,
+  sshUrlTemplate: TemplateArgs => string,
+  httpsUrlTemplate: TemplateArgs => string,
+};
+
+// we purposefully omit https and http as those are only valid if they end in the .git extension
+const GIT_PROTOCOLS = ['git:', 'ssh:'];
+
+const HOSTED_GIT_CONFIGURATIONS: Array<HostedGitConfiguration> = [
+  {
+    protocol: 'bitbucket:',
+    defaultHostname: 'bitbucket.org',
+    hostnames: new Set(['bitbucket.org', 'bitbucket.com']),
+    sshUrlTemplate: parts => `ssh://git@${parts.hostname}/${parts.user}/${parts.repo}.git${parts.urlHash}`,
+    httpsUrlTemplate: parts => `https://${parts.hostname}/${parts.user}/${parts.repo}.git${parts.urlHash}`,
+  },
+  {
+    protocol: 'gitlab:',
+    defaultHostname: 'gitlab.com',
+    hostnames: new Set(['github.com']),
+    sshUrlTemplate: parts => `ssh://git@${parts.hostname}/${parts.user}/${parts.repo}.git${parts.urlHash}`,
+    httpsUrlTemplate: parts => `https://${parts.hostname}/${parts.user}/${parts.repo}.git${parts.urlHash}`,
+  },
+  {
+    protocol: 'github:',
+    defaultHostname: 'github.com',
+    hostnames: new Set(['github.com']),
+    sshUrlTemplate: parts => `ssh://git@${parts.hostname}/${parts.user}/${parts.repo}${parts.urlHash}`,
+    httpsUrlTemplate: parts => `https://${parts.hostname}/${parts.user}/${parts.repo}.git${parts.urlHash}`,
+  },
+];
+
+const HOSTED_GIT_CONFIGURATIONS_BY_PROTOCOL: Map<string, HostedGitConfiguration> = new Map(
+  (function*(): Iterable<[string, HostedGitConfiguration]> {
+    for (const conf of HOSTED_GIT_CONFIGURATIONS) {
+      yield [conf.protocol, conf];
+    }
+  })(),
+);
+
+const HOSTED_GIT_CONFIGURATIONS_BY_HOSTNAME: Map<string, HostedGitConfiguration> = new Map(
+  (function*(): Iterable<[string, HostedGitConfiguration]> {
+    for (const conf of HOSTED_GIT_CONFIGURATIONS) {
+      for (const hostname of conf.hostnames) {
+        yield [hostname, conf];
+      }
+    }
+  })(),
+);
+
+const GIT_EXTENSION = '.git';
+
+const GIT_PROTOCOL_REGEXP = /git\+.+:/;
+const GITHUB_SHORTHAND_REGEXP = /^[^:@%/\s.-][^:@%/\s]*[/][^:@\s/%]+(?:#.*)?$/;
+const GIT_WITHOUT_PROTOCOL_REGEXP = /^git@([^:@%/\s]+)[/:].+?$/;
+const SCP_LIKE_REGEXP = /^git\+ssh:\/\/((?:[^@:\/]+@)?([^@:\/]+):([^/]*).*)/;
 
 const supportsArchiveCache: {[key: string]: boolean} = map({
   'github.com': false, // not support, doubt they will ever support it
@@ -48,33 +117,136 @@ export default class Git implements GitRefResolvingInterface {
   cwd: string;
   gitUrl: GitUrl;
 
+  static isGitPattern(pattern: string): boolean {
+    const scpLikeMatch = SCP_LIKE_REGEXP.exec(pattern);
+    if (scpLikeMatch && /[^0-9]/.test(scpLikeMatch[3])) {
+      return true;
+    }
+
+    const parsed = url.parse(pattern);
+
+    const protocol = parsed.protocol;
+    if (!protocol) {
+      if (GITHUB_SHORTHAND_REGEXP.test(pattern)) {
+        return true;
+      }
+      return GIT_WITHOUT_PROTOCOL_REGEXP.test(pattern);
+    }
+
+    const pathname = parsed.pathname;
+    if (pathname && pathname.endsWith(GIT_EXTENSION)) {
+      // ends in .git
+      return true;
+    }
+
+    if (GIT_PROTOCOL_REGEXP.test(protocol)) {
+      return true;
+    }
+
+    if (GIT_PROTOCOLS.includes(protocol)) {
+      return true;
+    }
+
+    if (HOSTED_GIT_CONFIGURATIONS_BY_PROTOCOL.has(protocol)) {
+      return true;
+    }
+
+    if (parsed.hostname && parsed.path) {
+      const path = parsed.path;
+      if (HOSTED_GIT_CONFIGURATIONS_BY_HOSTNAME.has(parsed.hostname)) {
+        // only if dependency is pointing to a git repo,
+        // e.g. facebook/flow and not file in a git repo facebook/flow/archive/v1.0.0.tar.gz
+        return path.split('/').filter(Boolean).length === 2;
+      }
+    }
+
+    return false;
+  }
+
+  static isGithubShorthand(pattern: string): boolean {
+    return GITHUB_SHORTHAND_REGEXP.test(pattern);
+  }
+
+  static explodeHostedGitFragment(pattern: string, reporter: Reporter): ExplodedFragment {
+    let parts, path;
+    parts = pattern.split(/#(.*)/, 2);
+    path = parts[0];
+    const hash = parts[1] || '';
+
+    path = path.replace(/^[^:/]+:\/\//, ''); // remove protocol (may also remove dependency name)
+    path = path.replace(/^[^:/@]+@[^:/]+(?:[:]\d+)?[:/]/, ''); // remove dependency name and/or user+hostname
+    path = path.replace(/\.git$/, ''); // remove .git extension
+
+    parts = path.split(/[/](.*)/, 2);
+    if (parts.length < 2) {
+      throw new MessageError(reporter.lang('invalidHostedGitFragment', pattern));
+    }
+    const [user, repo] = parts;
+
+    return {
+      user,
+      repo,
+      hash,
+    };
+  }
+
+  static resolveHostedGitPattern(pattern: string, reporter: Reporter): [string, ExplodedFragment | void] {
+    let hostedGit: ExplodedFragment | void = undefined;
+
+    if (GITHUB_SHORTHAND_REGEXP.test(pattern)) {
+      pattern = 'github:' + pattern;
+    }
+
+    for (const [protocol, hostedGitConfiguration] of HOSTED_GIT_CONFIGURATIONS_BY_PROTOCOL) {
+      if (pattern.startsWith(protocol)) {
+        pattern = pattern.slice(protocol.length);
+        hostedGit = Git.explodeHostedGitFragment(pattern, reporter);
+        const templateArgs: TemplateArgs = {
+          ...hostedGit,
+          hostname: hostedGitConfiguration.defaultHostname,
+          urlHash: hostedGit.hash ? '#' + decodeURIComponent(hostedGit.hash) : '',
+        };
+        pattern = hostedGitConfiguration.httpsUrlTemplate(templateArgs);
+        break;
+      }
+    }
+
+    return [pattern, hostedGit];
+  }
+
   /**
    * npm URLs contain a 'git+' scheme prefix, which is not understood by git.
    * git "URLs" also allow an alternative scp-like syntax, so they're not standard URLs.
    */
-  static npmUrlToGitUrl(npmUrl: string): GitUrl {
-    // Expand shortened format first if needed
-    npmUrl = npmUrl.replace(/^github:/, 'git+ssh://git@github.com/');
-
+  static npmUrlToGitUrl(pattern: string, reporter: Reporter): GitUrl {
     // Special case in npm, where ssh:// prefix is stripped to pass scp-like syntax
     // which in git works as remote path only if there are no slashes before ':'.
-    const match = npmUrl.match(/^git\+ssh:\/\/((?:[^@:\/]+@)?([^@:\/]+):([^/]*).*)/);
+    const scpLikeMatch = pattern.match(SCP_LIKE_REGEXP);
     // Additionally, if the host part is digits-only, npm falls back to
     // interpreting it as an SSH URL with a port number.
-    if (match && /[^0-9]/.test(match[3])) {
+    if (scpLikeMatch && /[^0-9]/.test(scpLikeMatch[3])) {
       return {
-        hostname: match[2],
+        hostname: scpLikeMatch[2],
         protocol: 'ssh:',
-        repository: match[1],
+        repository: scpLikeMatch[1],
       };
     }
 
-    const repository = npmUrl.replace(/^git\+/, '');
+    if (GIT_WITHOUT_PROTOCOL_REGEXP.test(pattern)) {
+      pattern = 'ssh://' + pattern;
+    }
+
+    let hostedGit: ExplodedFragment | void = undefined;
+    [pattern, hostedGit] = Git.resolveHostedGitPattern(pattern, reporter);
+
+    const repository = pattern.replace(/^git\+/, '');
     const parsed = url.parse(repository);
+
     return {
       hostname: parsed.hostname || null,
       protocol: parsed.protocol || 'file:',
       repository,
+      hostedGit,
     };
   }
 
@@ -184,7 +356,7 @@ export default class Git implements GitRefResolvingInterface {
         proc.on('error', reject);
         writeStream.on('error', reject);
         writeStream.on('end', done);
-        writeStream.on('open', function() {
+        writeStream.on('open', () => {
           proc.stdout.pipe(hashStream).pipe(writeStream);
         });
         writeStream.once('finish', done);
@@ -201,7 +373,7 @@ export default class Git implements GitRefResolvingInterface {
         const writeStream = createWriteStream(dest);
         proc.on('error', reject);
         writeStream.on('error', reject);
-        writeStream.on('open', function() {
+        writeStream.on('open', () => {
           proc.stdout.pipe(hashStream).pipe(writeStream);
         });
         writeStream.once('finish', done);

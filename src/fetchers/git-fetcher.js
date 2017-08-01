@@ -122,7 +122,7 @@ export default class GitFetcher extends BaseFetcher {
     const hash = this.hash;
     invariant(hash, 'Commit hash required');
 
-    const gitUrl = Git.npmUrlToGitUrl(this.reference);
+    const gitUrl = Git.npmUrlToGitUrl(this.reference, this.reporter);
     const git = new Git(this.config, gitUrl, hash);
     await git.init();
 

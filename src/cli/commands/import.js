@@ -9,7 +9,6 @@ import {verifyTreeCheck} from './check.js';
 import {MessageError} from '../../errors.js';
 import {getExoticResolver} from '../../resolvers/index.js';
 import BaseResolver from '../../resolvers/base-resolver.js';
-import HostedGitResolver, {explodeHostedGitFragment} from '../../resolvers/exotics/hosted-git-resolver.js';
 import GistResolver, {explodeGistFragment} from '../../resolvers/exotics/gist-resolver.js';
 import GitResolver from '../../resolvers/exotics/git-resolver.js';
 import FileResolver from '../../resolvers/exotics/file-resolver.js';
@@ -39,23 +38,6 @@ class ImportResolver extends BaseResolver {
       return path.dirname(parent._loc);
     }
     return this.config.cwd;
-  }
-
-  resolveHostedGit(info: Manifest, Resolver: Class<HostedGitResolver>): Manifest {
-    const {range} = PackageRequest.normalizePattern(this.pattern);
-    const exploded = explodeHostedGitFragment(range, this.reporter);
-    const hash = (info: any).gitHead;
-    invariant(hash, 'expected package gitHead');
-    const url = Resolver.getTarballUrl(exploded, hash);
-    info._uid = hash;
-    info._remote = {
-      resolved: url,
-      type: 'tarball',
-      registry: this.registry,
-      reference: url,
-      hash: null,
-    };
-    return info;
   }
 
   resolveGist(info: Manifest, Resolver: typeof GistResolver): Manifest {
@@ -129,9 +111,7 @@ class ImportResolver extends BaseResolver {
   resolveImport(info: Manifest): Manifest {
     const {range} = PackageRequest.normalizePattern(this.pattern);
     const Resolver = getExoticResolver(range);
-    if (Resolver && Resolver.prototype instanceof HostedGitResolver) {
-      return this.resolveHostedGit(info, Resolver);
-    } else if (Resolver && Resolver === GistResolver) {
+    if (Resolver && Resolver === GistResolver) {
       return this.resolveGist(info, Resolver);
     } else if (Resolver && Resolver === GitResolver) {
       return this.resolveGit(info, Resolver);

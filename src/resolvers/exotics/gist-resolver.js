@@ -38,6 +38,6 @@ export default class GistResolver extends ExoticResolver {
   hash: string;
 
   resolve(): Promise<Manifest> {
-    return this.fork(GitResolver, false, `https://gist.github.com/${this.id}.git#${this.hash}`);
+    return this.fork(GitResolver, `https://gist.github.com/${this.id}.git#${this.hash}`);
   }
 }
