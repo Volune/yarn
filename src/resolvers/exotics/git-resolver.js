@@ -12,12 +12,16 @@ import Git from '../../util/git.js';
 
 const urlParse = require('url').parse;
 
-const GIT_PROTOCOL_PATTERN = /git\+.+:/;
+const GIT_PROTOCOL_REGEXP = /git\+.+:/;
 
 // we purposefully omit https and http as those are only valid if they end in the .git extension
 const GIT_PROTOCOLS = ['git:', 'ssh:'];
 
+const HOSTED_GIT_PROTOCOLS = ['github:', 'gitlab:', 'bitbucket:'];
+
 const GIT_HOSTS = ['github.com', 'gitlab.com', 'bitbucket.com', 'bitbucket.org'];
+
+const GITHUB_SHORTHAND_REGEXP = /^[^:@%/\s.-][^:@%/\s]*[/][^:@\s/%]+(?:#.*)?$/;
 
 export default class GitResolver extends ExoticResolver {
   constructor(request: PackageRequest, fragment: string) {
@@ -34,10 +38,8 @@ export default class GitResolver extends ExoticResolver {
   static isVersion(pattern: string): boolean {
     const parts = urlParse(pattern);
 
-    // this pattern hasn't been exploded yet, we'll hit this code path again later once
-    // we've been normalized #59
     if (!parts.protocol) {
-      return false;
+      return GITHUB_SHORTHAND_REGEXP.test(pattern);
     }
 
     const pathname = parts.pathname;
@@ -46,11 +48,15 @@ export default class GitResolver extends ExoticResolver {
       return true;
     }
 
-    if (GIT_PROTOCOL_PATTERN.test(parts.protocol)) {
+    if (GIT_PROTOCOL_REGEXP.test(parts.protocol)) {
       return true;
     }
 
-    if (GIT_PROTOCOLS.indexOf(parts.protocol) >= 0) {
+    if (GIT_PROTOCOLS.includes(parts.protocol)) {
+      return true;
+    }
+
+    if (HOSTED_GIT_PROTOCOLS.includes(parts.protocol)) {
       return true;
     }
 
@@ -59,7 +65,7 @@ export default class GitResolver extends ExoticResolver {
       if (GIT_HOSTS.indexOf(parts.hostname) >= 0) {
         // only if dependency is pointing to a git repo,
         // e.g. facebook/flow and not file in a git repo facebook/flow/archive/v1.0.0.tar.gz
-        return path.split('/').filter((p): boolean => !!p).length === 2;
+        return path.split('/').filter(Boolean).length === 2;
       }
     }
 

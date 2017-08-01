@@ -109,95 +109,6 @@ export default class HostedGitResolver extends ExoticResolver {
     throw new Error('Not implemented');
   }
 
-  async getRefOverHTTP(url: string): Promise<string> {
-    const gitUrl = Git.npmUrlToGitUrl(url);
-    const client = new Git(this.config, gitUrl, this.hash);
-
-    let out = await this.config.requestManager.request({
-      url: `${url}/info/refs?service=git-upload-pack`,
-      queue: this.resolver.fetchingQueue,
-    });
-
-    if (out) {
-      // clean up output
-      let lines = out.trim().split('\n');
-
-      // remove first two lines which contains compatibility info etc
-      lines = lines.slice(2);
-
-      // remove last line which contains the terminator "0000"
-      lines.pop();
-
-      // remove line lengths from start of each line
-      lines = lines.map((line): string => line.slice(4));
-
-      out = lines.join('\n');
-    } else {
-      throw new Error(this.reporter.lang('hostedGitResolveError'));
-    }
-
-    return client.setRefHosted(out);
-  }
-
-  async resolveOverHTTP(url: string): Promise<Manifest> {
-    const commit = await this.getRefOverHTTP(url);
-    const {config} = this;
-
-    const tarballUrl = this.constructor.getTarballUrl(this.exploded, commit);
-
-    const tryRegistry = async (registry): Promise<?Manifest> => {
-      const {filename} = registries[registry];
-
-      const href = this.constructor.getHTTPFileUrl(this.exploded, filename, commit);
-      const file = await config.requestManager.request({
-        url: href,
-        queue: this.resolver.fetchingQueue,
-      });
-      if (!file) {
-        return null;
-      }
-
-      const json = await config.readJson(href, () => JSON.parse(file));
-      json._uid = commit;
-      json._remote = {
-        resolved: tarballUrl,
-        type: 'tarball',
-        reference: tarballUrl,
-        registry,
-      };
-      return json;
-    };
-
-    const file = await tryRegistry(this.registry);
-    if (file) {
-      return file;
-    }
-
-    for (const registry in registries) {
-      if (registry === this.registry) {
-        continue;
-      }
-
-      const file = await tryRegistry(registry);
-      if (file) {
-        return file;
-      }
-    }
-
-    return {
-      name: guessName(url),
-      version: '0.0.0',
-      _uid: commit,
-      _remote: {
-        resolved: tarballUrl,
-        type: 'tarball',
-        reference: tarballUrl,
-        registry: 'npm',
-        hash: undefined,
-      },
-    };
-  }
-
   async hasHTTPCapability(url: string): Promise<boolean> {
     return (
       (await this.config.requestManager.request({
@@ -210,22 +121,9 @@ export default class HostedGitResolver extends ExoticResolver {
   }
 
   async resolve(): Promise<Manifest> {
-    // If we already have the tarball, just return it without having to make any HTTP requests.
-    const shrunk = this.request.getLocked('tarball');
-    if (shrunk) {
-      return shrunk;
-    }
-
     const httpUrl = this.constructor.getGitHTTPUrl(this.exploded);
     const httpBaseUrl = this.constructor.getGitHTTPBaseUrl(this.exploded);
     const sshUrl = this.constructor.getGitSSHUrl(this.exploded);
-
-    // If we can access the files over HTTP then we should as it's MUCH faster than git
-    // archive and tarball unarchiving. The HTTP API is only available for public repos
-    // though.
-    if (await this.hasHTTPCapability(httpBaseUrl)) {
-      return this.resolveOverHTTP(httpUrl);
-    }
 
     // If the url is accessible over git archive then we should immediately delegate to
     // the git resolver.

@@ -13,6 +13,7 @@ jest.mock('../../src/util/git/git-spawn.js', () => ({
   }),
 }));
 
+import type {GitUrl} from '../../src/util/git.js';
 import Config from '../../src/config.js';
 import Git from '../../src/util/git.js';
 import {spawn as spawnGit} from '../../src/util/git/git-spawn.js';
@@ -20,65 +21,146 @@ import {NoopReporter} from '../../src/reporters/index.js';
 
 jasmine.DEFAULT_TIMEOUT_INTERVAL = 90000;
 
-test('npmUrlToGitUrl', () => {
-  expect(Git.npmUrlToGitUrl('git+https://github.com/npm-opam/ocamlfind.git')).toEqual({
-    protocol: 'https:',
-    hostname: 'github.com',
-    repository: 'https://github.com/npm-opam/ocamlfind.git',
-  });
-  expect(Git.npmUrlToGitUrl('https://github.com/npm-opam/ocamlfind.git')).toEqual({
-    protocol: 'https:',
-    hostname: 'github.com',
-    repository: 'https://github.com/npm-opam/ocamlfind.git',
-  });
-  expect(Git.npmUrlToGitUrl('git://github.com/npm-opam/ocamlfind.git')).toEqual({
-    protocol: 'git:',
-    hostname: 'github.com',
-    repository: 'git://github.com/npm-opam/ocamlfind.git',
-  });
-  expect(Git.npmUrlToGitUrl('git+ssh://git@gitlab.mydomain.tld:10202/project-name/my-package.git')).toEqual({
-    protocol: 'ssh:',
-    hostname: 'gitlab.mydomain.tld',
-    repository: 'ssh://git@gitlab.mydomain.tld:10202/project-name/my-package.git',
-  });
-  expect(Git.npmUrlToGitUrl('git+ssh://git@github.com/npm-opam/ocamlfind.git')).toEqual({
-    protocol: 'ssh:',
-    hostname: 'github.com',
-    repository: 'ssh://git@github.com/npm-opam/ocamlfind.git',
-  });
-  expect(Git.npmUrlToGitUrl('git+ssh://scp-host-nickname:npm-opam/ocamlfind.git')).toEqual({
-    protocol: 'ssh:',
-    hostname: 'scp-host-nickname',
-    repository: 'scp-host-nickname:npm-opam/ocamlfind.git',
-  });
-  expect(Git.npmUrlToGitUrl('git+ssh://user@scp-host-nickname:npm-opam/ocamlfind.git')).toEqual({
-    protocol: 'ssh:',
-    hostname: 'scp-host-nickname',
-    repository: 'user@scp-host-nickname:npm-opam/ocamlfind.git',
-  });
-  expect(Git.npmUrlToGitUrl('github:npm-opam/ocamlfind.git#v1.2.3')).toEqual({
-    protocol: 'ssh:',
-    hostname: 'github.com',
-    repository: 'ssh://git@github.com/npm-opam/ocamlfind.git#v1.2.3',
-  });
-  expect(Git.npmUrlToGitUrl('github:npm-opam/ocamlfind#v1.2.3')).toEqual({
-    protocol: 'ssh:',
-    hostname: 'github.com',
-    repository: 'ssh://git@github.com/npm-opam/ocamlfind#v1.2.3',
-  });
-  expect(Git.npmUrlToGitUrl('github:npm-opam/ocamlfind.git')).toEqual({
-    protocol: 'ssh:',
-    hostname: 'github.com',
-    repository: 'ssh://git@github.com/npm-opam/ocamlfind.git',
-  });
-  expect(Git.npmUrlToGitUrl('github:npm-opam/ocamlfind')).toEqual({
-    protocol: 'ssh:',
-    hostname: 'github.com',
-    repository: 'ssh://git@github.com/npm-opam/ocamlfind',
+type TestData = {
+  pattern: string,
+  expectedGitUrl: GitUrl,
+};
+const TEST_DATA_LIST: Array<TestData> = [
+  // {
+  //   pattern: 'git+https://github.com/npm-opam/ocamlfind.git',
+  //   expectedGitUrl: {
+  //     protocol: 'https:',
+  //     hostname: 'github.com',
+  //     repository: 'https://github.com/npm-opam/ocamlfind.git',
+  //   },
+  // },
+  // {
+  //   pattern: 'https://github.com/npm-opam/ocamlfind.git',
+  //   expectedGitUrl: {
+  //     protocol: 'https:',
+  //     hostname: 'github.com',
+  //     repository: 'https://github.com/npm-opam/ocamlfind.git',
+  //   },
+  // },
+  // {
+  //   pattern: 'git://github.com/npm-opam/ocamlfind.git',
+  //   expectedGitUrl: {
+  //     protocol: 'git:',
+  //     hostname: 'github.com',
+  //     repository: 'git://github.com/npm-opam/ocamlfind.git',
+  //   },
+  // },
+  // {
+  //   pattern: 'git+ssh://git@gitlab.mydomain.tld:10202/project-name/my-package.git',
+  //   expectedGitUrl: {
+  //     protocol: 'ssh:',
+  //     hostname: 'gitlab.mydomain.tld',
+  //     repository: 'ssh://git@gitlab.mydomain.tld:10202/project-name/my-package.git',
+  //   },
+  // },
+  // {
+  //   pattern: 'git+ssh://git@github.com/npm-opam/ocamlfind.git',
+  //   expectedGitUrl: {
+  //     protocol: 'ssh:',
+  //     hostname: 'github.com',
+  //     repository: 'ssh://git@github.com/npm-opam/ocamlfind.git',
+  //   },
+  // },
+  // {
+  //   pattern: 'git+ssh://scp-host-nickname:npm-opam/ocamlfind.git',
+  //   expectedGitUrl: {
+  //     protocol: 'ssh:',
+  //     hostname: 'scp-host-nickname',
+  //     repository: 'scp-host-nickname:npm-opam/ocamlfind.git',
+  //   },
+  // },
+  // {
+  //   pattern: 'git+ssh://user@scp-host-nickname:npm-opam/ocamlfind.git',
+  //   expectedGitUrl: {
+  //     protocol: 'ssh:',
+  //     hostname: 'scp-host-nickname',
+  //     repository: 'user@scp-host-nickname:npm-opam/ocamlfind.git',
+  //   },
+  // },
+  // {
+  //   pattern: 'github:npm-opam/ocamlfind.git#v1.2.3',
+  //   expectedGitUrl: {
+  //     protocol: 'ssh:',
+  //     hostname: 'github.com',
+  //     repository: 'ssh://git@github.com/npm-opam/ocamlfind.git#v1.2.3',
+  //   },
+  // },
+  // {
+  //   pattern: 'github:npm-opam/ocamlfind#v1.2.3',
+  //   expectedGitUrl: {
+  //     protocol: 'ssh:',
+  //     hostname: 'github.com',
+  //     repository: 'ssh://git@github.com/npm-opam/ocamlfind#v1.2.3',
+  //   },
+  // },
+  // {
+  //   pattern: 'github:npm-opam/ocamlfind.git',
+  //   expectedGitUrl: {
+  //     protocol: 'ssh:',
+  //     hostname: 'github.com',
+  //     repository: 'ssh://git@github.com/npm-opam/ocamlfind.git',
+  //   },
+  // },
+  // {
+  //   pattern: 'github:npm-opam/ocamlfind',
+  //   expectedGitUrl: {
+  //     protocol: 'ssh:',
+  //     hostname: 'github.com',
+  //     repository: 'ssh://git@github.com/npm-opam/ocamlfind',
+  //   },
+  // },
+  {
+    pattern: 'git+ssh://git@bitbucket.org:team/repo.git',
+    expectedGitUrl: {
+      protocol: 'ssh:',
+      hostname: 'bitbucket.org',
+      repository: 'ssh://git@bitbucket.org/team/repo.git',
+    },
+  },
+  {
+    pattern: 'git@bitbucket.org/team/repo.git',
+    expectedGitUrl: {
+      protocol: 'ssh:',
+      hostname: 'bitbucket.org',
+      repository: 'ssh://git@bitbucket.org/team/repo.git',
+    },
+  },
+  {
+    pattern: 'user/repo',
+    expectedGitUrl: {
+      protocol: 'ssh:',
+      hostname: 'github.com',
+      repository: 'ssh://git@github.com/user/repo',
+    },
+  },
+];
+
+describe('isGitPattern', () => {
+  for (const testData of TEST_DATA_LIST) {
+    test(`isGitPattern(${testData.pattern})`, () => {
+      expect(Git.isGitPattern(testData.pattern)).toBe(true);
+    });
+  }
+
+  test('not isGitPattern(package@git@bitbucket.org:team/repo.git)', () => {
+    expect(Git.isGitPattern('package@git@bitbucket.org:team/repo.git')).toBe(false);
   });
 });
 
-test('secureGitUrl', async function(): Promise<void> {
+describe('npmUrlToGitUrl', () => {
+  for (const testData of TEST_DATA_LIST) {
+    test(`npmUrlToGitUrl(${testData.pattern})`, () => {
+      expect(Git.npmUrlToGitUrl(testData.pattern)).toEqual(testData.expectedGitUrl);
+    });
+  }
+});
+
+test('secureGitUrl', async function (): Promise<void> {
   const reporter = new NoopReporter();
 
   const originalRepoExists = Git.repoExists;
