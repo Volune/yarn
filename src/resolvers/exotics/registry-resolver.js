@@ -26,6 +26,6 @@ export default class RegistryResolver extends ExoticResolver {
   range: string;
 
   resolve(): Promise<Manifest> {
-    return this.fork(this.constructor.factory, false, this.name, this.range);
+    return this.fork(this.constructor.factory, this.name, this.range);
   }
 }

@@ -27,13 +27,13 @@ export default class BaseResolver {
   config: Config;
   registry: RegistryNames;
 
-  fork(Resolver: Class<BaseResolver>, resolveArg: any, ...args: Array<string>): Promise<Manifest> {
+  fork(Resolver: Class<BaseResolver>, ...args: Array<string>): Promise<Manifest> {
     const resolver = new Resolver(this.request, ...args);
     resolver.registry = this.registry;
-    return resolver.resolve(resolveArg);
+    return resolver.resolve();
   }
 
-  resolve(resolveArg?: any): Promise<Manifest> {
+  resolve(): Promise<Manifest> {
     throw new Error('Not implemented');
   }
 }

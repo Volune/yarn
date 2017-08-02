@@ -26,100 +26,100 @@ type TestData = {
   expectedGitUrl: GitUrl,
 };
 const TEST_DATA_LIST: Array<TestData> = [
-  // {
-  //   pattern: 'git+https://github.com/npm-opam/ocamlfind.git',
-  //   expectedGitUrl: {
-  //     protocol: 'https:',
-  //     hostname: 'github.com',
-  //     repository: 'https://github.com/npm-opam/ocamlfind.git',
-  //   },
-  // },
-  // {
-  //   pattern: 'https://github.com/npm-opam/ocamlfind.git',
-  //   expectedGitUrl: {
-  //     protocol: 'https:',
-  //     hostname: 'github.com',
-  //     repository: 'https://github.com/npm-opam/ocamlfind.git',
-  //   },
-  // },
-  // {
-  //   pattern: 'git://github.com/npm-opam/ocamlfind.git',
-  //   expectedGitUrl: {
-  //     protocol: 'git:',
-  //     hostname: 'github.com',
-  //     repository: 'git://github.com/npm-opam/ocamlfind.git',
-  //   },
-  // },
-  // {
-  //   pattern: 'git+ssh://git@gitlab.mydomain.tld:10202/project-name/my-package.git',
-  //   expectedGitUrl: {
-  //     protocol: 'ssh:',
-  //     hostname: 'gitlab.mydomain.tld',
-  //     repository: 'ssh://git@gitlab.mydomain.tld:10202/project-name/my-package.git',
-  //   },
-  // },
-  // {
-  //   pattern: 'git+ssh://git@github.com/npm-opam/ocamlfind.git',
-  //   expectedGitUrl: {
-  //     protocol: 'ssh:',
-  //     hostname: 'github.com',
-  //     repository: 'ssh://git@github.com/npm-opam/ocamlfind.git',
-  //   },
-  // },
-  // {
-  //   pattern: 'git+ssh://scp-host-nickname:npm-opam/ocamlfind.git',
-  //   expectedGitUrl: {
-  //     protocol: 'ssh:',
-  //     hostname: 'scp-host-nickname',
-  //     repository: 'scp-host-nickname:npm-opam/ocamlfind.git',
-  //   },
-  // },
-  // {
-  //   pattern: 'git+ssh://user@scp-host-nickname:npm-opam/ocamlfind.git',
-  //   expectedGitUrl: {
-  //     protocol: 'ssh:',
-  //     hostname: 'scp-host-nickname',
-  //     repository: 'user@scp-host-nickname:npm-opam/ocamlfind.git',
-  //   },
-  // },
-  // {
-  //   pattern: 'github:npm-opam/ocamlfind.git#v1.2.3',
-  //   expectedGitUrl: {
-  //     protocol: 'ssh:',
-  //     hostname: 'github.com',
-  //     repository: 'ssh://git@github.com/npm-opam/ocamlfind.git#v1.2.3',
-  //   },
-  // },
-  // {
-  //   pattern: 'github:npm-opam/ocamlfind#v1.2.3',
-  //   expectedGitUrl: {
-  //     protocol: 'ssh:',
-  //     hostname: 'github.com',
-  //     repository: 'ssh://git@github.com/npm-opam/ocamlfind#v1.2.3',
-  //   },
-  // },
-  // {
-  //   pattern: 'github:npm-opam/ocamlfind.git',
-  //   expectedGitUrl: {
-  //     protocol: 'ssh:',
-  //     hostname: 'github.com',
-  //     repository: 'ssh://git@github.com/npm-opam/ocamlfind.git',
-  //   },
-  // },
-  // {
-  //   pattern: 'github:npm-opam/ocamlfind',
-  //   expectedGitUrl: {
-  //     protocol: 'ssh:',
-  //     hostname: 'github.com',
-  //     repository: 'ssh://git@github.com/npm-opam/ocamlfind',
-  //   },
-  // },
+  {
+    pattern: 'git+https://github.com/npm-opam/ocamlfind.git',
+    expectedGitUrl: {
+      protocol: 'https:',
+      hostname: 'github.com',
+      repository: 'https://github.com/npm-opam/ocamlfind.git',
+    },
+  },
+  {
+    pattern: 'https://github.com/npm-opam/ocamlfind.git',
+    expectedGitUrl: {
+      protocol: 'https:',
+      hostname: 'github.com',
+      repository: 'https://github.com/npm-opam/ocamlfind.git',
+    },
+  },
+  {
+    pattern: 'git://github.com/npm-opam/ocamlfind.git',
+    expectedGitUrl: {
+      protocol: 'git:',
+      hostname: 'github.com',
+      repository: 'git://github.com/npm-opam/ocamlfind.git',
+    },
+  },
+  {
+    pattern: 'git+ssh://git@gitlab.mydomain.tld:10202/project-name/my-package.git',
+    expectedGitUrl: {
+      protocol: 'ssh:',
+      hostname: 'gitlab.mydomain.tld',
+      repository: 'ssh://git@gitlab.mydomain.tld:10202/project-name/my-package.git',
+    },
+  },
+  {
+    pattern: 'git+ssh://git@github.com/npm-opam/ocamlfind.git',
+    expectedGitUrl: {
+      protocol: 'ssh:',
+      hostname: 'github.com',
+      repository: 'ssh://git@github.com/npm-opam/ocamlfind.git',
+    },
+  },
+  {
+    pattern: 'git+ssh://scp-host-nickname:npm-opam/ocamlfind.git',
+    expectedGitUrl: {
+      protocol: 'ssh:',
+      hostname: 'scp-host-nickname',
+      repository: 'scp-host-nickname:npm-opam/ocamlfind.git',
+    },
+  },
+  {
+    pattern: 'git+ssh://user@scp-host-nickname:npm-opam/ocamlfind.git',
+    expectedGitUrl: {
+      protocol: 'ssh:',
+      hostname: 'scp-host-nickname',
+      repository: 'user@scp-host-nickname:npm-opam/ocamlfind.git',
+    },
+  },
+  {
+    pattern: 'github:npm-opam/ocamlfind.git#v1.2.3',
+    expectedGitUrl: {
+      protocol: 'ssh:',
+      hostname: 'github.com',
+      repository: 'ssh://git@github.com/npm-opam/ocamlfind.git#v1.2.3',
+    },
+  },
+  {
+    pattern: 'github:npm-opam/ocamlfind#v1.2.3',
+    expectedGitUrl: {
+      protocol: 'ssh:',
+      hostname: 'github.com',
+      repository: 'ssh://git@github.com/npm-opam/ocamlfind#v1.2.3',
+    },
+  },
+  {
+    pattern: 'github:npm-opam/ocamlfind.git',
+    expectedGitUrl: {
+      protocol: 'ssh:',
+      hostname: 'github.com',
+      repository: 'ssh://git@github.com/npm-opam/ocamlfind.git',
+    },
+  },
+  {
+    pattern: 'github:npm-opam/ocamlfind',
+    expectedGitUrl: {
+      protocol: 'ssh:',
+      hostname: 'github.com',
+      repository: 'ssh://git@github.com/npm-opam/ocamlfind',
+    },
+  },
   {
     pattern: 'git+ssh://git@bitbucket.org:team/repo.git',
     expectedGitUrl: {
       protocol: 'ssh:',
       hostname: 'bitbucket.org',
-      repository: 'ssh://git@bitbucket.org/team/repo.git',
+      repository: 'git@bitbucket.org:team/repo.git',
     },
   },
   {
@@ -155,12 +155,101 @@ describe('isGitPattern', () => {
 describe('npmUrlToGitUrl', () => {
   for (const testData of TEST_DATA_LIST) {
     test(`npmUrlToGitUrl(${testData.pattern})`, () => {
-      expect(Git.npmUrlToGitUrl(testData.pattern)).toEqual(testData.expectedGitUrl);
+      const reporter = new NoopReporter();
+      expect(Git.npmUrlToGitUrl(testData.pattern, reporter)).toEqual(testData.expectedGitUrl);
     });
   }
 });
 
-test('secureGitUrl', async function (): Promise<void> {
+describe('explodeHostedGitFragment', () => {
+  test('should allow for hashes as part of the branch name', () => {
+    const reporter = new NoopReporter();
+    const fragmentString = 'jure/lens#fix-issue-#96';
+    const expectedFragment: ExplodedFragment = {
+      user: 'jure',
+      repo: 'lens',
+      hash: 'fix-issue-#96',
+    };
+
+    expect(Git.explodeHostedGitFragment(fragmentString, reporter)).toEqual(expectedFragment);
+  });
+
+  test('should work for branch names without hashes', () => {
+    const reporter = new NoopReporter();
+    const fragmentString = 'jure/lens#feature/fix-issue';
+    const expectedFragment: ExplodedFragment = {
+      user: 'jure',
+      repo: 'lens',
+      hash: 'feature/fix-issue',
+    };
+
+    expect(Git.explodeHostedGitFragment(fragmentString, reporter)).toEqual(expectedFragment);
+  });
+
+  test('should work identical with and without .git suffix', () => {
+    const reporter = new NoopReporter();
+    const fragmentWithGit = 'jure/lens.git#feature/fix-issue';
+    const fragmentWithoutGit = 'jure/lens#feature/fix-issue';
+    const expectedFragment: ExplodedFragment = {
+      user: 'jure',
+      repo: 'lens',
+      hash: 'feature/fix-issue',
+    };
+
+    expect(Git.explodeHostedGitFragment(fragmentWithoutGit, reporter)).toEqual(expectedFragment);
+    expect(Git.explodeHostedGitFragment(fragmentWithGit, reporter)).toEqual(expectedFragment);
+  });
+
+  test('explodeHostedGitFragment should work for colon separator after host', () => {
+    const reporter = new NoopReporter();
+    const fragmentString = 'git@bitbucket.org:team2/repo.git';
+    const expectedFragment: ExplodedFragment = {
+      user: 'team2',
+      repo: 'repo',
+      hash: '',
+    };
+
+    expect(Git.explodeHostedGitFragment(fragmentString, reporter)).toEqual(expectedFragment);
+  });
+
+  test('explodeHostedGitFragment should work for colon separator after host and with protocol before', () => {
+    const reporter = new NoopReporter();
+    const fragmentString = 'git+ssh://git@bitbucket.org:team/repo.git';
+    const expectedFragment: ExplodedFragment = {
+      user: 'team',
+      repo: 'repo',
+      hash: '',
+    };
+
+    expect(Git.explodeHostedGitFragment(fragmentString, reporter)).toEqual(expectedFragment);
+  });
+
+  test('explodeHostedGitFragment should work for slash separator after host', () => {
+    const reporter = new NoopReporter();
+    const fragmentString = 'git@bitbucket.org/team/repo.git';
+    const expectedFragment: ExplodedFragment = {
+      user: 'team',
+      repo: 'repo',
+      hash: '',
+    };
+
+    expect(Git.explodeHostedGitFragment(fragmentString, reporter)).toEqual(expectedFragment);
+  });
+
+  test('explodeHostedGitFragment should work for package name and colon separator after host', () => {
+    const reporter = new NoopReporter();
+    const fragmentString = 'package@git@bitbucket.org:team/repo.git';
+    const expectedFragment: ExplodedFragment = {
+      user: 'team',
+      repo: 'repo',
+      hash: '',
+    };
+
+    expect(Git.explodeHostedGitFragment(fragmentString, reporter)).toEqual(expectedFragment);
+  });
+});
+
+test('secureGitUrl', async (): Promise<void> => {
   const reporter = new NoopReporter();
 
   const originalRepoExists = Git.repoExists;
@@ -171,20 +260,20 @@ test('secureGitUrl', async function (): Promise<void> {
 
   let hasException = false;
   try {
-    await Git.secureGitUrl(Git.npmUrlToGitUrl('http://fake-fake-fake-fake.com/123.git'), '', reporter);
+    await Git.secureGitUrl(Git.npmUrlToGitUrl('http://fake-fake-fake-fake.com/123.git', reporter), '', reporter);
   } catch (e) {
     hasException = true;
   }
   (Git: any).repoExists = originalRepoExists;
   expect(hasException).toEqual(true);
 
-  let gitURL = await Git.secureGitUrl(Git.npmUrlToGitUrl('http://github.com/yarnpkg/yarn.git'), '', reporter);
+  let gitURL = await Git.secureGitUrl(Git.npmUrlToGitUrl('http://github.com/yarnpkg/yarn.git', reporter), '', reporter);
   expect(gitURL.repository).toEqual('https://github.com/yarnpkg/yarn.git');
 
-  gitURL = await Git.secureGitUrl(Git.npmUrlToGitUrl('https://github.com/yarnpkg/yarn.git'), '', reporter);
+  gitURL = await Git.secureGitUrl(Git.npmUrlToGitUrl('https://github.com/yarnpkg/yarn.git', reporter), '', reporter);
   expect(gitURL.repository).toEqual('https://github.com/yarnpkg/yarn.git');
 
-  gitURL = await Git.secureGitUrl(Git.npmUrlToGitUrl('git://github.com/yarnpkg/yarn.git'), '', reporter);
+  gitURL = await Git.secureGitUrl(Git.npmUrlToGitUrl('git://github.com/yarnpkg/yarn.git', reporter), '', reporter);
   expect(gitURL.repository).toEqual('https://github.com/yarnpkg/yarn.git');
 });
 
