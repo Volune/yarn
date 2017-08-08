@@ -111,7 +111,7 @@ const TEST_DATA_LIST: Array<TestData> = [
     expectedGitUrl: {
       protocol: 'https:',
       hostname: 'github.com',
-      repository: 'https://github.com/npm-opam/ocamlfind.git#v1.2.3',
+      repository: 'https://github.com/npm-opam/ocamlfind.git',
       hostedGit: {
         user: 'npm-opam',
         repo: 'ocamlfind',
@@ -124,7 +124,7 @@ const TEST_DATA_LIST: Array<TestData> = [
     expectedGitUrl: {
       protocol: 'https:',
       hostname: 'github.com',
-      repository: 'https://github.com/npm-opam/ocamlfind.git#v1.2.3',
+      repository: 'https://github.com/npm-opam/ocamlfind.git',
       hostedGit: {
         user: 'npm-opam',
         repo: 'ocamlfind',

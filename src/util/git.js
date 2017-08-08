@@ -30,7 +30,6 @@ export type GitUrl = {
 };
 type TemplateArgs = ExplodedFragment & {
   hostname: string,
-  urlHash: string,
 };
 type HostedGitConfiguration = {
   protocol: string,
@@ -48,22 +47,22 @@ const HOSTED_GIT_CONFIGURATIONS: Array<HostedGitConfiguration> = [
     protocol: 'bitbucket:',
     defaultHostname: 'bitbucket.org',
     hostnames: new Set(['bitbucket.org', 'bitbucket.com']),
-    sshUrlTemplate: parts => `ssh://git@${parts.hostname}/${parts.user}/${parts.repo}.git${parts.urlHash}`,
-    httpsUrlTemplate: parts => `https://${parts.hostname}/${parts.user}/${parts.repo}.git${parts.urlHash}`,
+    sshUrlTemplate: parts => `ssh://git@${parts.hostname}/${parts.user}/${parts.repo}.git`,
+    httpsUrlTemplate: parts => `https://${parts.hostname}/${parts.user}/${parts.repo}.git`,
   },
   {
     protocol: 'gitlab:',
     defaultHostname: 'gitlab.com',
     hostnames: new Set(['github.com']),
-    sshUrlTemplate: parts => `ssh://git@${parts.hostname}/${parts.user}/${parts.repo}.git${parts.urlHash}`,
-    httpsUrlTemplate: parts => `https://${parts.hostname}/${parts.user}/${parts.repo}.git${parts.urlHash}`,
+    sshUrlTemplate: parts => `ssh://git@${parts.hostname}/${parts.user}/${parts.repo}.git`,
+    httpsUrlTemplate: parts => `https://${parts.hostname}/${parts.user}/${parts.repo}.git`,
   },
   {
     protocol: 'github:',
     defaultHostname: 'github.com',
     hostnames: new Set(['github.com']),
-    sshUrlTemplate: parts => `ssh://git@${parts.hostname}/${parts.user}/${parts.repo}${parts.urlHash}`,
-    httpsUrlTemplate: parts => `https://${parts.hostname}/${parts.user}/${parts.repo}.git${parts.urlHash}`,
+    sshUrlTemplate: parts => `ssh://git@${parts.hostname}/${parts.user}/${parts.repo}`,
+    httpsUrlTemplate: parts => `https://${parts.hostname}/${parts.user}/${parts.repo}.git`,
   },
 ];
 
@@ -204,7 +203,6 @@ export default class Git implements GitRefResolvingInterface {
         const templateArgs: TemplateArgs = {
           ...hostedGit,
           hostname: hostedGitConfiguration.defaultHostname,
-          urlHash: hostedGit.hash ? '#' + decodeURIComponent(hostedGit.hash) : '',
         };
         pattern = hostedGitConfiguration.httpsUrlTemplate(templateArgs);
         break;

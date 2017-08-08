@@ -20,6 +20,7 @@ import * as compatibility from '../../package-compatibility.js';
 import Lockfile from '../../lockfile/wrapper.js';
 import * as fs from '../../util/fs.js';
 import * as util from '../../util/misc.js';
+import Git from '../../util/git.js';
 import {YARN_REGISTRY, LOCKFILE_FILENAME} from '../../constants.js';
 
 const NPM_REGISTRY = /http[s]:\/\/registry.npmjs.org/g;
@@ -58,17 +59,17 @@ class ImportResolver extends BaseResolver {
   }
 
   resolveGit(info: Manifest, Resolver: typeof GitResolver): Manifest {
-    const url = (info: any)._resolved;
-    const hash = (info: any).gitHead;
-    invariant(url, 'expected package _resolved');
-    invariant(hash, 'expected package gitHead');
-    info._uid = hash;
+    const commit = (info: any).gitHead;
+    invariant(commit, 'expected package gitHead');
+    const {range} = PackageRequest.normalizePattern(this.pattern);
+    const gitUrl = Git.npmUrlToGitUrl(range, this.reporter);
+    info._uid = commit;
     info._remote = {
-      resolved: `${url}#${hash}`,
+      resolved: `${gitUrl.repository}#${commit}`,
       type: 'git',
       registry: this.registry,
-      reference: url,
-      hash,
+      reference: gitUrl.repository,
+      hash: commit,
     };
     return info;
   }
